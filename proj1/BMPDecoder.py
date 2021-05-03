@@ -13,7 +13,7 @@ class BMPDecoder():
 
     def readFile(self,fname:str):
         try:
-            with open("emedia/image/"+fname,"rb") as file:
+            with open("./images/"+fname,"rb") as file:
                 while True:
                     byte=file.read(1)
                     if not byte:
