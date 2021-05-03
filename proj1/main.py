@@ -9,8 +9,8 @@ def main():
     print(bmp.pixel_offset)
     bmp.meta.display_meta_data()
     bmp.load_color_table()
-    bmp.load_profile_data()
-    bmp.profile.display_profile_info()
+    if bmp.load_profile_data():
+        bmp.profile.display_profile_info()
     bmp.save_anoanonymization("zapisany.bmp")
     fft("./images/"+file_name)
     show_image("./images/"+file_name)
