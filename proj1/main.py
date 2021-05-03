@@ -12,9 +12,9 @@ def main():
     bmp.load_profile_data()
     bmp.profile.display_profile_info()
     bmp.save_anoanonymization("zapisany.bmp")
-    fft("emedia/image/"+file_name)
-    show_image("emedia/image/"+file_name)
-    show_image("emedia/image/zapisany.bmp")
+    fft("./images/"+file_name)
+    show_image("./images/"+file_name)
+    show_image("./images/zapisany.bmp")
     
 
 if __name__=='__main__':
