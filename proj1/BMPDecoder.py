@@ -115,7 +115,7 @@ class BMPDecoder():
             begin=14+self.meta.header_size
             if self.meta.compression_method==3 and self.meta.header_size==40: 
                 begin+=12
-            elif self.meta.compression_method==4 and self.meta.header_size==40:
+            elif self.meta.compression_method==6 and self.meta.header_size==40:
                 begin+=16
             length=0
             if self.meta.colors_palette==0 or self.meta.colors_palette==None:
