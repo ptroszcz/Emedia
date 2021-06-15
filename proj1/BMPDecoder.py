@@ -1,6 +1,6 @@
 from MetaData import MetaData
 from ICCprofile import ICCProfile
-
+from RSA import *
 
 
 class BMPDecoder():
@@ -9,11 +9,17 @@ class BMPDecoder():
         self.pixel_offset=0
         self.meta = MetaData()
         self.profile = ICCProfile()
+        self.private_key=(0,0)
+        self.block_size=128
+        self.encrypted_pixels=[]
+        self.decrypted_pixels=[]
+        self.original_pixel_number=[]
+        self.init_vector=0
 
 
     def readFile(self,fname:str):
         try:
-            with open("./images/"+fname,"rb") as file:
+            with open("image/"+fname,"rb") as file:
                 while True:
                     byte=file.read(1)
                     if not byte:
@@ -115,7 +121,7 @@ class BMPDecoder():
             begin=14+self.meta.header_size
             if self.meta.compression_method==3 and self.meta.header_size==40: 
                 begin+=12
-            elif self.meta.compression_method==6 and self.meta.header_size==40:
+            elif self.meta.compression_method==4 and self.meta.header_size==40:
                 begin+=16
             length=0
             if self.meta.colors_palette==0 or self.meta.colors_palette==None:
@@ -181,14 +187,30 @@ class BMPDecoder():
             return False
 
 
+    def pixels_length(self):
+        pixel_storage=int((self.meta.width*self.meta.color_depth+31)/32)
+        pixel_storage=pixel_storage*4*self.meta.height
+        if self.meta.compression_method==1:
+            pixel_array=[]
+            i=0
+            j=0
+            while(i<pixel_storage):
+                pixel_array.append(bytes.fromhex(self.data[self.pixel_offset+j]))
+                i=i+int(self.data[self.pixel_offset+j],16)
+                j=j+1
+                pixel_array.append(bytes.fromhex(self.data[self.pixel_offset+j]))
+                j=j+1
+            pixel_storage=j
+        return pixel_storage
+
 
 
     def save_anoanonymization(self,file_name:str):
-        with open("emedia/image/"+file_name,'wb') as file:
+        with open("image/"+file_name,'wb') as file:
             offset=14+self.meta.header_size
             if self.meta.compression_method==3 and self.meta.header_size==40: 
                 offset+=12
-            elif self.meta.compression_method==4 and self.meta.header_size==40:
+            elif self.meta.compression_method==6 and self.meta.header_size==40:
                 offset+=16
             if self.meta.color_depth<=8:
                 if self.meta.colors_palette==0 or self.meta.colors_palette==None:
@@ -290,7 +312,130 @@ class BMPDecoder():
                     file.write(bytes.fromhex(self.data[i]))
 
                 
+    def savefile(self,file_name:str):
+         with open("image/"+file_name,'wb') as file:
+             for i in range(0,len(self.data)):
+                #print(self.data[i])
+                file.write(bytes.fromhex(self.data[i]))
+
+    def save_ecrypted_file(self,file_name:str):
+        with open("image/"+file_name,'wb') as file:
+            for i in range(0,self.pixel_offset):
+                file.write(bytes.fromhex(self.data[i]))
+            
+            block=int(self.private_key[0].bit_length()/8)
+            j=0
+            for i in range(0,len(self.encrypted_pixels)):
+                if i%block!=0:
+                    j=j+1
+                    file.write(bytes.fromhex(self.encrypted_pixels[i]))
+                    if j==self.original_pixel_number:
+                        break
+                
+            #for i in range(0,len(self.encrypted_pixels)):
+                #file.write(bytes.fromhex(self.encrypted_pixels[i]))
+            
+            pixel_storage=self.pixels_length()
+            end_of_pixels=self.pixel_offset+pixel_storage
+            for i in range(end_of_pixels,self.meta.bmp_size):
+                file.write(bytes.fromhex(self.data[i]))
+            #self.meta.width=int(self.data[21]+self.data[20]+self.data[19]+self.data[18],16)
+
+    def save_decrypted_file(self,file_name:str):
+        with open("image/"+file_name,'wb') as file:
+            for i in range(0,self.pixel_offset):
+                file.write(bytes.fromhex(self.data[i]))
+            for i in range(0,len(self.decrypted_pixels)):
+                file.write(bytes.fromhex(self.decrypted_pixels[i]))
+            pixel_storage=self.pixels_length()
+            end_of_pixels=self.pixel_offset+pixel_storage
+            for i in range(end_of_pixels,self.meta.bmp_size):
+                file.write(bytes.fromhex(self.data[i]))
+
+    def load_encryption(self,private_key):
+        self.private_key=private_key
+        self.block_size=128
+        self.original_pixel_number=self.pixels_length()
+        pixel_storage=int(self.pixels_length())
+        for i in range(0,pixel_storage):
+            self.encrypted_pixels.append(self.data[self.pixel_offset+i])
+
+    
+    def encrypt(self):
+        pixel_storage=int(self.pixels_length())
+        pixels=[]
+        for i in range(0,pixel_storage):
+            pixels.append(int(self.data[self.pixel_offset+i],16))
+        #print(len(pixels))
+        #print(pixel_storage)
+        encrypted_pixels,self.private_key,self.block_size=encryption(pixels)
+        #print(len(encrypted_pixels))
+        for i in range(0,len(encrypted_pixels)):
+            encrypted_pixels[i]=encrypted_pixels[i].hex()
+        self.encrypted_pixels=encrypted_pixels
+        self.original_pixel_number=pixel_storage
 
 
+    def encrypt_ready(self):
+        pixel_storage=int(self.pixels_length())
+        pixels=[]
+        for i in range(0,pixel_storage):
+            pixels.append(int(self.data[self.pixel_offset+i],16))
+        #print(len(pixels))
+        #print(pixel_storage)
+        encrypted_pixels,self.private_key,self.block_size=encrypt_ready(pixels)
+        #print(len(encrypted_pixels))
+        for i in range(0,len(encrypted_pixels)):
+            encrypted_pixels[i]=encrypted_pixels[i].hex()
+        self.encrypted_pixels=encrypted_pixels
+        self.original_pixel_number=pixel_storage
 
+    def decrypt_ready(self):
+        pixel_storage=int(self.pixels_length())
+        pixels=[]
+        for i in range(0,len(self.encrypted_pixels)):
+            pixels.append(int(self.encrypted_pixels[i],16))
+        decrypted_pixels=decrypt_ready(pixels,self.block_size,self.original_pixel_number)
+        for i in range(0,len(decrypted_pixels)):
+            decrypted_pixels[i]=decrypted_pixels[i].hex()
+        self.decrypted_pixels=decrypted_pixels
+        #print(pixel_storage)
+        #print(len(decrypted_pixels))
 
+    def encryptCBC(self):
+        pixel_storage=int(self.pixels_length())
+        pixels=[]
+        for i in range(0,pixel_storage):
+            pixels.append(int(self.data[self.pixel_offset+i],16))
+        #print(len(pixels))
+        #print(pixel_storage)
+        encrypted_pixels,self.private_key,self.block_size,self.init_vector=encryptionCBC(pixels)
+        #print(len(encrypted_pixels))
+        for i in range(0,len(encrypted_pixels)):
+            encrypted_pixels[i]=encrypted_pixels[i].hex()
+        self.encrypted_pixels=encrypted_pixels
+        self.original_pixel_number=pixel_storage
+        
+    def decrypt(self):
+        pixel_storage=int(self.pixels_length())
+        pixels=[]
+        for i in range(0,len(self.encrypted_pixels)):
+            pixels.append(int(self.encrypted_pixels[i],16))
+        decrypted_pixels=decryption(pixels,self.private_key,self.block_size,self.original_pixel_number)
+        for i in range(0,len(decrypted_pixels)):
+            decrypted_pixels[i]=decrypted_pixels[i].hex()
+        self.decrypted_pixels=decrypted_pixels
+        #print(pixel_storage)
+        #print(len(decrypted_pixels))
+
+    def decryptCBC(self):
+        pixel_storage=int(self.pixels_length())
+        pixels=[]
+        for i in range(0,len(self.encrypted_pixels)):
+            pixels.append(int(self.encrypted_pixels[i],16))
+        decrypted_pixels=decryptionCBC(pixels,self.private_key,self.block_size,self.original_pixel_number,self.init_vector)
+        for i in range(0,len(decrypted_pixels)):
+            decrypted_pixels[i]=decrypted_pixels[i].hex()
+        self.decrypted_pixels=decrypted_pixels
+        #print(pixel_storage)
+        #print(len(decrypted_pixels))
